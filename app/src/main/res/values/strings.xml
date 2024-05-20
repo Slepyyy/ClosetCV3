@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">ClosetCV3</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+        <string name="title_activity_search">Search</string>
+        <string name="title_activity_board">Board</string>
+        <string name="title_activity_chatbot">Chat Bot</string>
+    <string name="title_activity_camera" />
+    <string name="delete_image" />
+</resources>
