@@ -3,6 +3,7 @@ package com.example.closetcv3
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
@@ -14,6 +15,7 @@ import com.example.closetcv3.network.GoogleSearchRepository
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlin.random.Random
 
 class HomeActivity : AppCompatActivity() {
 
@@ -35,73 +37,69 @@ class HomeActivity : AppCompatActivity() {
         val navView: BottomNavigationView = findViewById(R.id.nav_view)
         NavigationUtil.setupBottomNavigationView(this, navView)
 
-        // Get user responses from intent or savedInstanceState
-        val userResponses = intent.getStringArrayListExtra("USER_RESPONSES") ?: emptyList<String>()
+        // Get user responses from SharedPreferences
+        val userResponses = getUserResponses()
+        Log.d("HomeActivity", "Retrieved User Responses: $userResponses")
 
         // Determine fashion style based on user responses
         val fashionStyle = determineFashionStyle(userResponses)
+        Log.d("HomeActivity", "Determined Fashion Style: ${fashionStyle.style}")
+
+        // Fetch images based on determined fashion style
         fetchImagesForStyle(fashionStyle)
     }
 
-    private fun determineFashionStyle(userResponses: List<String>): FashionStyle {
-        var colorStyle = ""
-        var outfitStyle = ""
-        var shoeStyle = ""
-        var priorityStyle = ""
-        var accessoryStyle = ""
+    private fun getUserResponses(): ArrayList<String> {
+        val sharedPreferences = getSharedPreferences("UserResponses", Context.MODE_PRIVATE)
+        val gson = Gson()
+        val json = sharedPreferences.getString("responses", null)
+        val type = object : TypeToken<ArrayList<String>>() {}.type
+        return if (json != null) {
+            gson.fromJson(json, type)
+        } else {
+            arrayListOf()
+        }
+    }
 
-        if (userResponses.isNotEmpty()) {
-            colorStyle = when (userResponses.getOrNull(0)) {
-                "Bright, bold colors" -> "Eclectic/Boho"
-                "Neutrals" -> "Minimalist"
-                "Pastels" -> "Soft Girl"
-                "Dark tones" -> "Grunge/Goth"
-                else -> ""
-            }
-            outfitStyle = when (userResponses.getOrNull(1)) {
-                "Jeans and a comfy t-shirt" -> "Casual/Basic"
-                "Modern stylish" -> "Trendy/Streetwear"
-                "Fancy" -> "Chic/Elegant"
-                "Athletic wear" -> "Athleisure"
-                "Oversized" -> "Cozy/Comfy"
-                else -> ""
-            }
-            shoeStyle = when (userResponses.getOrNull(2)) {
-                "Sneakers" -> "Casual/Streetwear"
-                "Heels" -> "Elegant/Chic"
-                "Sandals" -> "Boho/Relaxed"
-                "Flats" -> "Classic/Practical"
-                "Fancy Shoes" -> "Glamorous/Elegant"
-                "Boots" -> "Edgy/Functional"
-                else -> ""
-            }
-            priorityStyle = when (userResponses.getOrNull(3)) {
-                "Comfort" -> "Casual/Comfy"
-                "Fashion trends" -> "Trendy/Fashion-forward"
-                "Versatility" -> "Capsule Wardrobe/Classic"
-                "Unique details" -> "Eclectic/Artistic"
-                else -> ""
-            }
-            accessoryStyle = when (userResponses.getOrNull(4)) {
-                "Simple" -> "Minimalist/Classic"
-                "Bold" -> "Statement/Boho"
-                "Practical" -> "Functional/Casual"
-                "None" -> "Natural/Unadorned"
-                else -> ""
-            }
+    private fun determineFashionStyle(userResponses: List<String>): FashionStyle {
+        val styleMapping = mapOf(
+            "bright, bold colors" to "Eclectic/Boho",
+            "neutrals" to "Minimalist",
+            "pastels" to "Soft Girl",
+            "dark tones" to "Grunge/Goth",
+            "jeans and a comfy t-shirt" to "Casual/Basic",
+            "modern stylish" to "Trendy/Streetwear",
+            "fancy" to "Chic/Elegant",
+            "athletic wear" to "Athleisure",
+            "oversized" to "Cozy/Comfy",
+            "sneakers" to "Casual/Streetwear",
+            "heels" to "Elegant/Chic",
+            "sandals" to "Boho/Relaxed",
+            "flats" to "Classic/Practical",
+            "fancy shoes" to "Glamorous/Elegant",
+            "boots" to "Edgy/Functional",
+            "comfort" to "Casual/Comfy",
+            "fashion trends" to "Trendy/Fashion-forward",
+            "versatility" to "Capsule Wardrobe/Classic",
+            "unique details" to "Eclectic/Artistic",
+            "simple" to "Minimalist/Classic",
+            "bold" to "Statement/Boho",
+            "practical" to "Functional/Casual",
+            "none" to "Natural/Unadorned"
+        )
+
+        val lowerCaseResponses = userResponses.map { it.lowercase() }
+        val allStyles = lowerCaseResponses.mapNotNull { response ->
+            styleMapping.entries.find { response.contains(it.key) }?.value
         }
 
-        // Determine final fashion style based on majority vote
-        val allStyles = listOf(colorStyle, outfitStyle, shoeStyle, priorityStyle, accessoryStyle)
         val styleCounts = allStyles.groupingBy { it }.eachCount()
-        val finalStyle = styleCounts.maxByOrNull { it.value }?.key ?: "Casual/Basic"
+        val finalStyle = styleCounts.maxByOrNull { it.value }?.key
 
-        // Provide a default fashion style if no match is found
-        return fashionStyles.firstOrNull { it.style == finalStyle } ?: FashionStyle(
-            style = "Casual/Basic",
-            description = "Comfortable and practical, this style focuses on everyday essentials like well-fitted jeans, t-shirts, hoodies, and casual jackets. It’s effortless and laid-back, perfect for day-to-day activities.",
-            searchKeywords = "casual fashion"
-        )
+        Log.d("determineFashionStyle", "Style Counts: $styleCounts")
+        Log.d("determineFashionStyle", "Final Style: $finalStyle")
+
+        return fashionStyles.firstOrNull { it.style == finalStyle } ?: fashionStyles.random()
     }
 
     private fun fetchImagesForStyle(fashionStyle: FashionStyle) {

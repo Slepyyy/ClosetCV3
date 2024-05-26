@@ -1,6 +1,7 @@
 package com.example.closetcv3
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -20,6 +21,7 @@ import com.example.closetcv3.adapters.ChatAdapter
 import com.example.closetcv3.databinding.ActivityChatBotBinding
 import com.example.closetcv3.models.Message
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -28,7 +30,7 @@ import java.util.UUID
 
 class ChatBot : AppCompatActivity() {
     private var messageList: ArrayList<Message> = ArrayList()
-    private var userResponses: ArrayList<String> = ArrayList() // Initialize userResponses
+    private var userResponses: ArrayList<String> = ArrayList()
 
     // DialogFlow
     private var sessionsClient: SessionsClient? = null
@@ -54,88 +56,94 @@ class ChatBot : AppCompatActivity() {
         binding.btnSend.setOnClickListener {
             val message: String = binding.editMessage.text.toString()
             if (message.isNotEmpty()) {
-                addMessageToList(message, false)
-                userResponses.add(message) // Add user's response to the list
-                if (message.equals("Thank you for answering", ignoreCase = true)) {
-                    val intent = Intent(this, HomeActivity::class.java)
-                    intent.putStringArrayListExtra("USER_RESPONSES", userResponses)
-                    startActivity(intent)
-                } else {
-                    sendMessageToBot(message)
-                }
+                addMessageToChat(message, true)
+                binding.editMessage.setText("")
+                sendMessageToBot(message)
             } else {
-                Toast.makeText(this@ChatBot, "Please enter text!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Please enter text!", Toast.LENGTH_SHORT).show()
             }
         }
 
-        // Initialize bot config
-        setUpBot()
-
-        // Set up navigation
-        val navView: BottomNavigationView = findViewById(R.id.nav_view)
+        // Bottom Navigation
+        val navView: BottomNavigationView = binding.navView
         NavigationUtil.setupBottomNavigationView(this, navView)
+
+        setupBot()
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    private fun addMessageToList(message: String, isReceived: Boolean) {
-        messageList.add(Message(message, isReceived))
-        binding.editMessage.setText("")
+    // Method to add message to chat
+    private fun addMessageToChat(message: String, isUser: Boolean) {
+        messageList.add(Message(message, isUser))
         chatAdapter.notifyDataSetChanged()
         binding.chatView.layoutManager?.scrollToPosition(messageList.size - 1)
+
+        if (isUser) {
+            // Add user response to list and log
+            userResponses.add(message)
+            saveUserResponses()
+            Log.d(TAG, "User Response Added: $message")
+            Log.d(TAG, "Current User Responses: $userResponses")
+        }
     }
 
-    private fun setUpBot() {
+    // Method to send message to bot
+    private fun sendMessageToBot(message: String) {
+        val queryInput = QueryInput.newBuilder()
+            .setText(TextInput.newBuilder().setText(message).setLanguageCode("en-US")).build()
+        GlobalScope.launch {
+            val detectIntentRequest = DetectIntentRequest.newBuilder()
+                .setSession(sessionName.toString())
+                .setQueryInput(queryInput)
+                .build()
+            try {
+                val response = sessionsClient?.detectIntent(detectIntentRequest)
+                withContext(Dispatchers.Main) {
+                    if (response != null) {
+                        handleBotResponse(response)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendMessageToBot: ${e.message}")
+            }
+        }
+    }
+
+    // Method to handle bot response
+    private fun handleBotResponse(response: DetectIntentResponse) {
+        val botReply = response.queryResult.fulfillmentText
+        if (botReply.isNotEmpty()) {
+            addMessageToChat(botReply, false)
+        } else {
+            addMessageToChat("Sorry, I didn't get that. Can you please repeat?", false)
+        }
+    }
+
+    // Setup bot
+    private fun setupBot() {
         try {
-            val stream = this.resources.openRawResource(R.raw.cred)
+            val stream = resources.openRawResource(R.raw.cred)
             val credentials: GoogleCredentials = GoogleCredentials.fromStream(stream)
-                .createScoped("https://www.googleapis.com/auth/cloud-platform")
-            val projectId: String = (credentials as ServiceAccountCredentials).projectId
-            val settingsBuilder: SessionsSettings.Builder = SessionsSettings.newBuilder()
-            val sessionsSettings: SessionsSettings = settingsBuilder.setCredentialsProvider(
+            val projectId = (credentials as ServiceAccountCredentials).projectId
+
+            val settingsBuilder = SessionsSettings.newBuilder()
+            val sessionsSettings = settingsBuilder.setCredentialsProvider(
                 FixedCredentialsProvider.create(credentials)
             ).build()
             sessionsClient = SessionsClient.create(sessionsSettings)
             sessionName = SessionName.of(projectId, uuid)
-            Log.d(TAG, "projectId : $projectId")
+
         } catch (e: Exception) {
-            Log.d(TAG, "setUpBot: " + e.message)
+            Log.e(TAG, "setupBot: ${e.message}")
         }
     }
 
-    private fun sendMessageToBot(message: String) {
-        val input = QueryInput.newBuilder()
-            .setText(TextInput.newBuilder().setText(message).setLanguageCode("en-US")).build()
-        GlobalScope.launch {
-            sendMessageInBg(input)
-        }
-    }
-
-    private suspend fun sendMessageInBg(queryInput: QueryInput) {
-        withContext(Dispatchers.Default) {
-            try {
-                val detectIntentRequest = DetectIntentRequest.newBuilder()
-                    .setSession(sessionName.toString())
-                    .setQueryInput(queryInput)
-                    .build()
-                val result = sessionsClient?.detectIntent(detectIntentRequest)
-                if (result != null) {
-                    runOnUiThread {
-                        updateUI(result)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "doInBackground: " + e.message)
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun updateUI(response: DetectIntentResponse) {
-        val botReply: String = response.queryResult.fulfillmentText
-        if (botReply.isNotEmpty()) {
-            addMessageToList(botReply, true)
-        } else {
-            Toast.makeText(this, "Something went wrong", Toast.LENGTH_SHORT).show()
-        }
+    // Save user responses to SharedPreferences
+    private fun saveUserResponses() {
+        val sharedPreferences = getSharedPreferences("UserResponses", Context.MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        val gson = Gson()
+        val json = gson.toJson(userResponses)
+        editor.putString("responses", json)
+        editor.apply()
     }
 }
