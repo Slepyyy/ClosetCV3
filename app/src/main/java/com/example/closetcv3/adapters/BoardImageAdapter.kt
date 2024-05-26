@@ -7,7 +7,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.example.closetcv3.R
+import com.example.closetcv3.R 
 
 class BoardImageAdapter(
     private val images: List<String>,
