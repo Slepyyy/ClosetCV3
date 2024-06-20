@@ -124,6 +124,7 @@ class ChatBot : AppCompatActivity() {
             val stream = resources.openRawResource(R.raw.cred)
             val credentials: GoogleCredentials = GoogleCredentials.fromStream(stream)
             val projectId = (credentials as ServiceAccountCredentials).projectId
+
             val settingsBuilder = SessionsSettings.newBuilder()
             val sessionsSettings = settingsBuilder.setCredentialsProvider(
                 FixedCredentialsProvider.create(credentials)
