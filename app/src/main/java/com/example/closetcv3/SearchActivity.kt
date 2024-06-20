@@ -70,8 +70,8 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun searchImages(query: String) {
-        val apiKey = "AIzaSyBulVoJPgELwQmukZ4rSuJk5_MQqy0kB1I"
-        val cx = "c159558f5d2334c94"
+        val apiKey = "key"
+        val cx = "cx"
 
         repository.searchImages(apiKey, cx, query, ::onImagesFetched, ::onError)
     }
